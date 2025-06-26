@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Preload Thai fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="VITAL MASTERY - แพลตฟอร์มเนื้อหาไทยที่มีการออกแบบทันสมัยและประสบการณ์การอ่านที่ยอดเยี่ยม">
+    <meta name="keywords" content="Thailand, Thai content, articles, blog, reading, บทความ">
+    <meta name="author" content="VITAL MASTERY">
+    
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="VITAL MASTERY">
+    <meta property="og:locale" content="th_TH">
+    <meta property="og:title" content="VITAL MASTERY">
+    <meta property="og:description" content="แพลตฟอร์มเนื้อหาไทยที่มีการออกแบบทันสมัยและประสบการณ์การอ่านที่ยอดเยี่ยม">
+    
+    <!-- Mobile optimizations -->
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="VITAL MASTERY">
+    
+    <!-- CSRF Token for API requests -->
+    {% csrf_token %}
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    
+    <title>VITAL MASTERY</title>
+    
+    <!-- Load compiled CSS -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'frontend/assets/index.css' %}">
+  </head>
+  <body class="bg-gray-50 text-gray-900 font-thai antialiased">
+    <!-- React app will mount here -->
+    <div id="root"></div>
+    
+    <!-- Bootstrap initial data for React app -->
+    <script>
+      window.INITIAL_DATA = {
+        user: {% if user.is_authenticated %}
+          {
+            id: {{ user.id }},
+            email: "{{ user.email }}",
+            username: "{{ user.username }}",
+            firstName: "{{ user.first_name }}",
+            lastName: "{{ user.last_name }}",
+            isAuthenticated: true,
+            isAuthor: {{ user.is_author|yesno:"true,false" }}
+          }
+        {% else %}
+          null
+        {% endif %},
+        csrfToken: "{{ csrf_token }}",
+        apiBaseUrl: "{% url 'api:content:article-list' %}".replace('/articles/', ''),
+        mediaUrl: "{{ MEDIA_URL }}"
+      };
+    </script>
+    
+    <!-- Load compiled JavaScript -->
+    <script type="module" src="{% static 'frontend/assets/index.js' %}"></script>
+  </body>
+</html> 

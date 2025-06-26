@@ -1,0 +1,1 @@
+# VITAL MASTERY Django Apps Package 
