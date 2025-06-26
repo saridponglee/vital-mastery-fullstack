@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 
 interface SSEOptions {
   withCredentials?: boolean;
@@ -7,6 +7,7 @@ interface SSEOptions {
   onOpen?: () => void;
   reconnectDelay?: number;
   maxReconnectAttempts?: number;
+  eventTypes?: string[];
 }
 
 interface UseSSEReturn {
@@ -14,6 +15,8 @@ interface UseSSEReturn {
   lastEvent: MessageEvent | null;
   eventSource: EventSource | null;
   reconnectCount: number;
+  connect: () => void;
+  disconnect: () => void;
 }
 
 export const useSSE = (url: string, options: SSEOptions = {}): UseSSEReturn => {
@@ -30,10 +33,16 @@ export const useSSE = (url: string, options: SSEOptions = {}): UseSSEReturn => {
     onError,
     onOpen,
     reconnectDelay = 3000,
-    maxReconnectAttempts = 5
+    maxReconnectAttempts = 5,
+    eventTypes = []
   } = options;
 
-  const connect = () => {
+  const connect = useCallback(() => {
+    // Close existing connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
     try {
       const eventSource = new EventSource(url, { withCredentials });
       eventSourceRef.current = eventSource;
@@ -52,11 +61,20 @@ export const useSSE = (url: string, options: SSEOptions = {}): UseSSEReturn => {
         onMessage?.(event);
       };
 
-      // Listen for specific article-published events
-      eventSource.addEventListener('article-published', (event: MessageEvent) => {
-        console.log('Article published event received:', event.data);
-        setLastEvent(event);
-        onMessage?.(event);
+      // Listen for specific event types
+      const defaultEventTypes = [
+        'article-published', 'comment', 'like', 'view', 
+        'article', 'editing', 'notification', 'announcement'
+      ];
+      
+      const typesToListen = eventTypes.length > 0 ? eventTypes : defaultEventTypes;
+      
+      typesToListen.forEach(eventType => {
+        eventSource.addEventListener(eventType, (event: MessageEvent) => {
+          console.log(`${eventType} event received:`, event.data);
+          setLastEvent(event);
+          onMessage?.(event);
+        });
       });
 
       eventSource.onerror = (error) => {
@@ -83,25 +101,33 @@ export const useSSE = (url: string, options: SSEOptions = {}): UseSSEReturn => {
       console.error('Failed to create EventSource:', error);
       setConnectionState('error');
     }
-  };
+  }, [url, withCredentials, onMessage, onError, onOpen, reconnectDelay, maxReconnectAttempts, eventTypes, reconnectCount]);
+
+  const disconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setConnectionState('disconnected');
+  }, []);
 
   useEffect(() => {
     connect();
 
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
+      disconnect();
     };
-  }, [url]);
+  }, [connect, disconnect]);
 
   return {
     connectionState,
     lastEvent,
     eventSource: eventSourceRef.current,
-    reconnectCount
+    reconnectCount,
+    connect,
+    disconnect
   };
 }; 

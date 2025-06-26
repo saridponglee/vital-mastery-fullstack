@@ -41,8 +41,13 @@ class Category(TranslatableModel):
         return self.safe_translation_getter('name', any_language=True) or f'Category {self.pk}'
     
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        # Only auto-generate slug if we have a translation with name
+        if hasattr(self, 'name') and self.name and (not hasattr(self, 'slug') or not self.slug):
+            try:
+                self.slug = slugify(self.name)
+            except:
+                # If translation doesn't exist yet, skip slug generation
+                pass
         super().save(*args, **kwargs)
 
 
@@ -214,14 +219,27 @@ class Article(TranslatableModel):
     
     def save(self, *args, **kwargs):
         # Auto-generate slug from title if not provided
-        if not self.slug and hasattr(self, 'title'):
-            self.slug = slugify(self.title)
+        try:
+            if hasattr(self, 'title') and self.title and (not hasattr(self, 'slug') or not self.slug):
+                self.slug = slugify(self.title)
+        except:
+            # If translation doesn't exist yet, skip slug generation
+            pass
         
         # Calculate reading time based on content
-        content_for_calculation = self.draft_content or self.content
-        if hasattr(self, 'content') and content_for_calculation:
-            word_count = self.get_word_count(content_for_calculation)
-            self.reading_time = max(1, word_count // 250)  # Assume 250 words per minute
+        try:
+            content_for_calculation = None
+            if hasattr(self, 'draft_content'):
+                content_for_calculation = self.draft_content
+            if not content_for_calculation and hasattr(self, 'content'):
+                content_for_calculation = self.content
+                
+            if content_for_calculation:
+                word_count = self.get_word_count(content_for_calculation)
+                self.reading_time = max(1, word_count // 250)  # Assume 250 words per minute
+        except:
+            # If translation doesn't exist yet, skip reading time calculation
+            pass
         
         # Set published_at when status changes to published
         if self.status == 'published' and not self.published_at:
@@ -229,8 +247,12 @@ class Article(TranslatableModel):
             self.published_at = timezone.now()
             
             # When publishing, move draft content to main content if exists
-            if hasattr(self, 'draft_content') and self.draft_content:
-                self.content = self.draft_content
+            try:
+                if hasattr(self, 'draft_content') and self.draft_content:
+                    self.content = self.draft_content
+            except:
+                # If translation doesn't exist yet, skip content migration
+                pass
         
         super().save(*args, **kwargs)
     
@@ -305,8 +327,13 @@ class Tag(TranslatableModel):
         return self.safe_translation_getter('name', any_language=True) or f'Tag {self.pk}'
     
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        # Only auto-generate slug if we have a translation with name
+        if hasattr(self, 'name') and self.name and (not hasattr(self, 'slug') or not self.slug):
+            try:
+                self.slug = slugify(self.name)
+            except:
+                # If translation doesn't exist yet, skip slug generation
+                pass
         super().save(*args, **kwargs)
 
 

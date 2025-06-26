@@ -198,6 +198,12 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
+# Django-EventStream Configuration
+EVENTSTREAM_STORAGE_CLASS = 'django_eventstream.storage.DjangoModelStorage'
+
+# Redis Configuration for real-time features
+REDIS_URL = env('REDIS_URL', default='redis://localhost:6379/0')
+
 # EventStream Configuration with Redis for scaling
 EVENTSTREAM_REDIS = {
     'host': env('REDIS_HOST', default='localhost'),
@@ -205,15 +211,51 @@ EVENTSTREAM_REDIS = {
     'db': env('REDIS_DB', default=0),
 }
 
-# Cache Configuration with Redis
+# Cache configuration for Redis
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': f"redis://{EVENTSTREAM_REDIS['host']}:{EVENTSTREAM_REDIS['port']}/1",
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,
+                'retry_on_timeout': True,
+            },
+        },
+        'KEY_PREFIX': 'vital_mastery',
+        'TIMEOUT': 300,  # 5 minutes default timeout
     }
+}
+
+# Channel layer configuration for real-time features
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [REDIS_URL],
+            'capacity': 1500,
+            'expiry': 60,
+        },
+    },
+}
+
+# Rate limiting configuration
+RATELIMIT_STORAGE = 'default'
+RATELIMIT_USE_CACHE = 'default'
+
+# SSE Authentication and Security
+SSE_ALLOWED_ORIGINS = env.list('SSE_ALLOWED_ORIGINS', default=CORS_ALLOWED_ORIGINS)
+SSE_MAX_CONNECTIONS_PER_USER = env.int('SSE_MAX_CONNECTIONS_PER_USER', default=5)
+SSE_CONNECTION_TIMEOUT = env.int('SSE_CONNECTION_TIMEOUT', default=3600)  # 1 hour
+
+# Real-time feature configuration
+REALTIME_SETTINGS = {
+    'ENABLE_COLLABORATIVE_EDITING': env.bool('ENABLE_COLLABORATIVE_EDITING', default=True),
+    'EDITING_SESSION_TIMEOUT': env.int('EDITING_SESSION_TIMEOUT', default=300),  # 5 minutes
+    'HEARTBEAT_INTERVAL': env.int('HEARTBEAT_INTERVAL', default=30),  # 30 seconds
+    'MAX_EDITING_SESSIONS_PER_ARTICLE': env.int('MAX_EDITING_SESSIONS_PER_ARTICLE', default=10),
+    'COUNTER_CACHE_TIMEOUT': env.int('COUNTER_CACHE_TIMEOUT', default=60),  # 1 minute
 }
 
 # Logging configuration
