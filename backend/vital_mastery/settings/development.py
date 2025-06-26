@@ -35,4 +35,8 @@ if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['*']
 
 # CORS settings for development
-CORS_ALLOW_ALL_ORIGINS = True 
+CORS_ALLOW_ALL_ORIGINS = True
+
+# Static files serving in development
+from django.conf import settings
+from django.conf.urls.static import static 

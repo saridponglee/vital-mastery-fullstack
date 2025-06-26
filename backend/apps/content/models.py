@@ -3,7 +3,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils.text import slugify
 from parler.models import TranslatableModel, TranslatedFields
-from tinymce.models import HTMLField
+from django_prose_editor.fields import ProseEditorField
 import re
 
 
@@ -48,7 +48,7 @@ class Category(TranslatableModel):
 
 class Article(TranslatableModel):
     """
-    Article model with multilingual content support.
+    Article model with multilingual content support and enhanced draft management.
     """
     
     STATUS_CHOICES = [
@@ -98,11 +98,29 @@ class Article(TranslatableModel):
         help_text='Number of views'
     )
     
+    # Enhanced draft management fields
+    last_saved_at = models.DateTimeField(
+        auto_now=True,
+        help_text='Last auto-save timestamp'
+    )
+    
+    editor_session_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text='Current editor session identifier'
+    )
+    
+    is_auto_saving = models.BooleanField(
+        default=False,
+        help_text='Indicates if auto-save is in progress'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     published_at = models.DateTimeField(null=True, blank=True)
     
-    # Translatable fields
+    # Translatable fields with enhanced draft support
     translations = TranslatedFields(
         title=models.CharField(
             max_length=255,
@@ -118,8 +136,55 @@ class Article(TranslatableModel):
             blank=True,
             help_text='Short excerpt or summary'
         ),
-        content=HTMLField(
-            help_text='Main article content (HTML)'
+        content=ProseEditorField(
+            extensions={
+                "Bold": True,
+                "Italic": True,
+                "Strike": True,
+                "Underline": True,
+                "Code": True,
+                "Heading": {"levels": [1, 2, 3, 4, 5, 6]},
+                "BulletList": True,
+                "OrderedList": True,
+                "Blockquote": True,
+                "HorizontalRule": True,
+                "Link": {
+                    "enableTarget": True,
+                    "protocols": ["http", "https", "mailto"]
+                },
+                "Table": True,
+                "History": True,
+                "HTML": True,
+                "Typographic": True,
+            },
+            sanitize=True,
+            help_text='Published article content (HTML)'
+        ),
+        draft_content=ProseEditorField(
+            extensions={
+                "Bold": True,
+                "Italic": True,
+                "Strike": True,
+                "Underline": True,
+                "Code": True,
+                "Heading": {"levels": [1, 2, 3, 4, 5, 6]},
+                "BulletList": True,
+                "OrderedList": True,
+                "Blockquote": True,
+                "HorizontalRule": True,
+                "Link": {
+                    "enableTarget": True,
+                    "protocols": ["http", "https", "mailto"]
+                },
+                "Table": True,
+                "History": True,
+                "HTML": True,
+                "Typographic": True,
+            },
+            sanitize=True,
+            blank=True,
+            null=True,
+            help_text='Draft content that may differ from published content'
         ),
         meta_description=models.TextField(
             max_length=160,
@@ -148,24 +213,32 @@ class Article(TranslatableModel):
             self.slug = slugify(self.title)
         
         # Calculate reading time based on content
-        if hasattr(self, 'content') and self.content:
-            word_count = self.get_word_count()
+        content_for_calculation = self.draft_content or self.content
+        if hasattr(self, 'content') and content_for_calculation:
+            word_count = self.get_word_count(content_for_calculation)
             self.reading_time = max(1, word_count // 250)  # Assume 250 words per minute
         
         # Set published_at when status changes to published
         if self.status == 'published' and not self.published_at:
             from django.utils import timezone
             self.published_at = timezone.now()
+            
+            # When publishing, move draft content to main content if exists
+            if hasattr(self, 'draft_content') and self.draft_content:
+                self.content = self.draft_content
         
         super().save(*args, **kwargs)
     
-    def get_word_count(self):
+    def get_word_count(self, content=None):
         """Calculate word count from content (removing HTML tags)."""
-        if not hasattr(self, 'content') or not self.content:
+        if content is None:
+            content = getattr(self, 'content', '')
+        
+        if not content:
             return 0
         
         # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', self.content)
+        text = re.sub(r'<[^>]+>', '', content)
         # Count words (handle Thai text which doesn't use spaces)
         words = text.split()
         return len(words)
@@ -179,10 +252,24 @@ class Article(TranslatableModel):
         self.views_count += 1
         self.save(update_fields=['views_count'])
     
+    def save_draft(self, draft_content):
+        """Save draft content without changing publication status."""
+        self.draft_content = draft_content
+        self.save(update_fields=['draft_content', 'last_saved_at'])
+    
+    def get_editor_content(self):
+        """Get the content that should be shown in the editor."""
+        return self.draft_content or self.content
+    
     @property
     def is_published(self):
         """Check if article is published."""
         return self.status == 'published'
+    
+    @property
+    def has_draft_changes(self):
+        """Check if there are unsaved draft changes."""
+        return bool(self.draft_content and self.draft_content != self.content)
 
 
 class Tag(TranslatableModel):
@@ -218,7 +305,6 @@ class Tag(TranslatableModel):
         super().save(*args, **kwargs)
 
 
-# Many-to-many relationship for article tags
 class ArticleTag(models.Model):
     """
     Through model for Article-Tag relationship.
@@ -231,15 +317,10 @@ class ArticleTag(models.Model):
         unique_together = ('article', 'tag')
         verbose_name = 'Article Tag'
         verbose_name_plural = 'Article Tags'
+    
+    def __str__(self):
+        return f'{self.article} - {self.tag}'
 
-# Add tags relationship to Article
-Article.add_to_class(
-    'tags',
-    models.ManyToManyField(
-        Tag,
-        through=ArticleTag,
-        blank=True,
-        related_name='articles',
-        help_text='Tags for this article'
-    )
-) 
+
+# Add many-to-many relationship for tags
+Article.add_to_class('tags', models.ManyToManyField(Tag, through=ArticleTag, related_name='articles', blank=True)) 

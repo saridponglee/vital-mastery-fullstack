@@ -39,7 +39,7 @@ THIRD_PARTY_APPS = [
     'rest_framework',
     'corsheaders',
     'parler',
-    'tinymce',
+    'django_prose_editor',
 ]
 
 LOCAL_APPS = [
@@ -76,6 +76,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'js_asset.context_processors.importmap',  # Required for Django-Prose-Editor
             ],
         },
     },
@@ -132,11 +133,26 @@ PARLER_LANGUAGES = {
     }
 }
 
-# Static files (CSS, JavaScript, Images)
+# Static files (CSS, JavaScript, Images) - Django 5.0.3 compatible
 STATIC_URL = env('STATIC_URL', default='/static/')
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
+]
+
+# Django 5.0.3 STORAGES configuration
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
 
 # Media files
@@ -170,47 +186,9 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 CORS_ALLOW_CREDENTIALS = True
 
-# TinyMCE Configuration
-TINYMCE_DEFAULT_CONFIG = {
-    'height': 500,
-    'width': '100%',
-    'menubar': False,
-    'plugins': 'link image lists preview code table media',
-    'toolbar': 'undo redo | formatselect | bold italic | '
-               'alignleft aligncenter alignright | '
-               'bullist numlist | link image media | removeformat code',
-    'content_style': '''
-        body { 
-            font-family: "Noto Sans Thai", Charter, Georgia, serif; 
-            font-size: 21px; 
-            line-height: 1.58;
-            max-width: 680px;
-            margin: 0 auto;
-            color: #1F2937;
-        }
-        h1, h2, h3, h4, h5, h6 {
-            font-family: "Noto Sans Thai", Georgia, serif;
-            margin-top: 1.5em;
-            margin-bottom: 0.5em;
-        }
-        p {
-            margin-bottom: 1.5em;
-        }
-    ''',
-    'valid_elements': '*[*]',
-    'extended_valid_elements': 'script[src|type],style[type]',
-    'file_picker_types': 'image',
-    'images_upload_url': '/api/v1/tinymce/upload/',
-    'automatic_uploads': True,
-    'images_reuse_filename': True,
-    'relative_urls': False,
-    'remove_script_host': False,
-    'convert_urls': True,
-    'language': 'th_TH',
-}
-
-TINYMCE_SPELLCHECKER = True
-TINYMCE_COMPRESSOR = True
+# Django-Prose-Editor Configuration
+# The editor is configured directly in model fields and admin forms
+# No global configuration is required for basic usage
 
 # Security settings
 SECURE_BROWSER_XSS_FILTER = True

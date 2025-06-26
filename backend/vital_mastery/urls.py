@@ -18,8 +18,7 @@ urlpatterns = [
     path('api/v1/', include('apps.interactions.urls')),
     path('api/v1/', include('apps.users.urls')),
     
-    # TinyMCE
-    path('tinymce/', include('tinymce.urls')),
+    # Django-Prose-Editor doesn't require URL configuration
     
     # Frontend SPA - catch all routes
     path('', TemplateView.as_view(template_name='index.html'), name='home'),

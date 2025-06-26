@@ -1,7 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from django.utils.safestring import mark_safe
 from parler.admin import TranslatableAdmin, TranslatableTabularInline
 from .models import Article, Category, Tag, ArticleTag
 
@@ -14,10 +13,10 @@ class CategoryAdmin(TranslatableAdmin):
     list_display = ('name', 'article_count', 'created_at')
     list_filter = ('created_at', 'updated_at')
     search_fields = ('translations__name', 'translations__description')
-    prepopulated_fields = {'slug': ('name',)}
     
     def get_prepopulated_fields(self, request, obj=None):
-        return {'slug': ('name',)}
+        # Return empty dict for translatable fields as they need special handling
+        return {}
     
     def article_count(self, obj):
         """Display the number of articles in this category."""
@@ -44,11 +43,11 @@ class ArticleTagInline(admin.TabularInline):
 @admin.register(Article)
 class ArticleAdmin(TranslatableAdmin):
     """
-    Admin interface for Article model with TinyMCE and multilingual support.
+    Enhanced admin interface for Article model with TinyMCE and draft management.
     """
     list_display = (
         'title', 'author', 'category', 'status', 
-        'reading_time', 'views_count', 'published_at'
+        'has_draft_indicator', 'reading_time', 'views_count', 'last_saved_at'
     )
     list_filter = (
         'status', 'category', 'created_at', 'published_at', 
@@ -59,10 +58,10 @@ class ArticleAdmin(TranslatableAdmin):
         'author__email', 'author__username'
     )
     autocomplete_fields = ['author', 'category']
-    prepopulated_fields = {'slug': ('title',)}
     readonly_fields = (
         'created_at', 'updated_at', 'views_count', 
-        'reading_time_display', 'featured_image_preview'
+        'reading_time_display', 'featured_image_preview',
+        'last_saved_at', 'draft_status'
     )
     
     inlines = [ArticleTagInline]
@@ -75,7 +74,7 @@ class ArticleAdmin(TranslatableAdmin):
         }),
         ('Content', {
             'fields': (
-                'excerpt', 'content'
+                'excerpt', 'content', 'draft_status'
             )
         }),
         ('Media', {
@@ -92,14 +91,43 @@ class ArticleAdmin(TranslatableAdmin):
         ('Statistics', {
             'fields': (
                 'reading_time_display', 'views_count', 
-                'created_at', 'updated_at', 'published_at'
+                'created_at', 'updated_at', 'published_at', 'last_saved_at'
             ),
             'classes': ('collapse',)
         }),
     )
     
     def get_prepopulated_fields(self, request, obj=None):
-        return {'slug': ('title',)}
+        # Return empty dict for translatable fields as they need special handling
+        return {}
+    
+    def has_draft_indicator(self, obj):
+        """Display draft status indicator."""
+        if obj.has_draft_changes:
+            return format_html(
+                '<span style="color: #f0ad4e;">📝 Draft Changes</span>'
+            )
+        return format_html('<span style="color: #5cb85c;">✓ Synced</span>')
+    has_draft_indicator.short_description = 'Draft Status'
+    
+    def draft_status(self, obj):
+        """Display detailed draft status information."""
+        if obj.has_draft_changes:
+            return format_html(
+                '<div style="padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">'
+                '<strong>Draft Changes Available</strong><br>'
+                'Last saved: {}<br>'
+                '<small>Changes will be published when status is set to "Published"</small>'
+                '</div>',
+                obj.last_saved_at.strftime('%Y-%m-%d %H:%M:%S') if obj.last_saved_at else 'Never'
+            )
+        return format_html(
+            '<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">'
+            '<strong>No Draft Changes</strong><br>'
+            'Content is synchronized'
+            '</div>'
+        )
+    draft_status.short_description = 'Draft Information'
     
     def reading_time_display(self, obj):
         """Display reading time in a user-friendly format."""
@@ -125,7 +153,7 @@ class ArticleAdmin(TranslatableAdmin):
     
     def save_model(self, request, obj, form, change):
         """Auto-assign author if not set and user is an author."""
-        if not obj.author_id and request.user.is_author:
+        if not obj.author_id and hasattr(request.user, 'is_author') and request.user.is_author:
             obj.author = request.user
         super().save_model(request, obj, form, change)
     
@@ -136,12 +164,8 @@ class ArticleAdmin(TranslatableAdmin):
             readonly.extend(['author', 'views_count'])
         return readonly
     
-    class Media:
-        """Include TinyMCE assets."""
-        js = (
-            '/static/tinymce/tinymce.min.js',
-            '/static/admin/js/tinymce_setup.js',
-        )
+    # Auto-save functionality is handled by Django-Prose-Editor internally
+    # No custom URLs needed for basic functionality
 
 
 @admin.register(Tag)
@@ -152,10 +176,10 @@ class TagAdmin(TranslatableAdmin):
     list_display = ('name', 'article_count', 'created_at')
     list_filter = ('created_at',)
     search_fields = ('translations__name',)
-    prepopulated_fields = {'slug': ('name',)}
     
     def get_prepopulated_fields(self, request, obj=None):
-        return {'slug': ('name',)}
+        # Return empty dict for translatable fields as they need special handling
+        return {}
     
     def article_count(self, obj):
         """Display the number of articles with this tag."""
