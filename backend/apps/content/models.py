@@ -118,7 +118,7 @@ class Article(TranslatableModel):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    published_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True, help_text='Timestamp when article was published')
     
     # Translatable fields with enhanced draft support
     translations = TranslatedFields(
@@ -202,6 +202,11 @@ class Article(TranslatableModel):
         verbose_name = 'Article'
         verbose_name_plural = 'Articles'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['status', '-published_at']),
+            models.Index(fields=['author', 'status']),
+        ]
     
     def __str__(self):
         title = self.safe_translation_getter('title', any_language=True)

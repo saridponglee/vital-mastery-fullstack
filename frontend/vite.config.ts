@@ -23,6 +23,19 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // EventStream proxy for real-time updates
+      '/events': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+        // Keep connection alive for SSE
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('Cache-Control', 'no-cache');
+            proxyReq.setHeader('Accept', 'text/event-stream');
+          });
+        },
+      },
     },
   },
   resolve: {

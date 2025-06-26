@@ -4,8 +4,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.db.models import Q, Count
 from django.contrib.auth.decorators import login_required
-from rest_framework import generics, filters, permissions, status
-from rest_framework.decorators import api_view, permission_classes
+from django.core.cache import cache
+from rest_framework import generics, filters, permissions, status, viewsets
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
@@ -348,4 +349,61 @@ def search_view(request):
     return Response({
         'results': serializer.data,
         'count': len(serializer.data)
-    }) 
+    })
+
+
+class ArticleViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for real-time article management.
+    """
+    serializer_class = ArticleDetailSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def get_queryset(self):
+        """Get articles based on user permissions."""
+        return Article.objects.filter(status='published').order_by('-published_at')
+    
+    @action(detail=False, methods=['get'])
+    def latest(self, request):
+        """Get latest published articles with caching."""
+        cache_key = f'latest_articles_{request.LANGUAGE_CODE}'
+        cached_articles = cache.get(cache_key)
+        
+        if cached_articles is None:
+            articles = self.get_queryset()[:10]
+            serializer = self.get_serializer(articles, many=True)
+            cached_articles = serializer.data
+            cache.set(cache_key, cached_articles, 300)  # Cache for 5 minutes
+        
+        return Response(cached_articles)
+    
+    @action(detail=False, methods=['get'])
+    def by_category(self, request):
+        """Get articles by category."""
+        category_slug = request.query_params.get('category')
+        if not category_slug:
+            return Response({'error': 'Category slug is required'}, status=400)
+        
+        articles = self.get_queryset().filter(
+            category__translations__slug=category_slug
+        )
+        
+        page = self.paginate_queryset(articles)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(articles, many=True)
+        return Response(serializer.data)
+    
+    def list(self, request, *args, **kwargs):
+        """Enhanced list method with caching."""
+        cache_key = f'article_list_{request.LANGUAGE_CODE}_{request.GET.urlencode()}'
+        cached_response = cache.get(cache_key)
+        
+        if cached_response is None:
+            response = super().list(request, *args, **kwargs)
+            cache.set(cache_key, response.data, 300)  # Cache for 5 minutes
+            return response
+        
+        return Response(cached_response) 

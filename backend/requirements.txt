@@ -10,6 +10,12 @@ psycopg[binary]==3.1.18
 Pillow==10.2.0
 python-decouple==3.8
 
+# Real-time functionality
+django-eventstream==4.5.1
+redis==5.0.1
+celery==5.3.6
+daphne==4.0.0
+
 # Development
 django-debug-toolbar==4.3.0
 black==24.2.0

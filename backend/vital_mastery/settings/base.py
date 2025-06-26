@@ -27,6 +27,7 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
 # Application definition
 DJANGO_APPS = [
+    'daphne',  # Must be first for ASGI support
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,6 +37,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    'django_eventstream',
     'rest_framework',
     'corsheaders',
     'parler',
@@ -83,6 +85,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'vital_mastery.wsgi.application'
+ASGI_APPLICATION = 'vital_mastery.asgi.application'
 
 # Database
 DATABASES = {
@@ -195,6 +198,24 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
+# EventStream Configuration with Redis for scaling
+EVENTSTREAM_REDIS = {
+    'host': env('REDIS_HOST', default='localhost'),
+    'port': env('REDIS_PORT', default=6379),
+    'db': env('REDIS_DB', default=0),
+}
+
+# Cache Configuration with Redis
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': f"redis://{EVENTSTREAM_REDIS['host']}:{EVENTSTREAM_REDIS['port']}/1",
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
 # Logging configuration
 LOGGING = {
     'version': 1,
@@ -215,6 +236,10 @@ LOGGING = {
         'apps': {
             'handlers': ['console'],
             'level': 'DEBUG',
+        },
+        'django_eventstream': {
+            'handlers': ['console'],
+            'level': 'INFO',
         },
     },
 } 
